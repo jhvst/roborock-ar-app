@@ -1,0 +1,234 @@
+<html>
+  <head>
+    <script src="http://localhost:8000/assets/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" integrity="sha384-WskhaSGFgHYWDcbwN70/dfYBj47jz9qbsMId/iRN3ewGhXQFZCSftd1LZCfmhktB" crossorigin="anonymous">
+    <script type="text/javascript">
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+window.onload = function() {
+    var socket = new WebSocket('ws://localhost:12345/rpi');
+    var container = document.getElementById("datastream");
+    socket.onopen = function(event) {
+        var p = document.createElement("P");
+        var now = new Date();
+        var t = document.createTextNode(now + ": websocket open");
+        p.appendChild(t);
+        container.prepend(p);
+    };
+    socket.onmessage = async function(event) {
+        var p = document.createElement("P");
+        var now = new Date();
+        var t = document.createTextNode(now + ":" + event.data);
+        p.appendChild(t);
+        container.prepend(p);
+
+        v = event.data.split(",");
+        roll = +v[0];
+        yaw = +v[1];
+        pitch = +v[2];
+
+        console.log(roll, yaw, pitch)
+
+        var none = true
+
+        if (yaw < 165 && yaw > 175) {
+            none = false
+            document.getElementById("media-player").classList.add("hidden");
+            document.getElementById("lights-off").classList.add("hidden");
+
+            var target = document.getElementById("bottom")
+            target.classList.add("pointing");
+            document.getElementById("lights-on").classList.remove("hidden");
+            await sleep(1000);
+            target.classList.remove("pointing");
+        }
+
+        if (yaw < -110 && yaw > -140) {
+            none = false
+            document.getElementById("lights-on").classList.add("hidden");
+            document.getElementById("lights-off").classList.add("hidden");
+
+            var target = document.getElementById("bottom-left")
+            target.classList.add("pointing");
+            document.getElementById("media-player").classList.remove("hidden");
+            await sleep(1000);
+            target.classList.remove("pointing");
+        }
+
+        if (yaw < -20 && yaw > -60) {
+            none = false
+            document.getElementById("media-player").classList.add("hidden");
+            document.getElementById("lights-on").classList.add("hidden");
+
+            var target = document.getElementById("top")
+            target.classList.add("pointing");
+            document.getElementById("lights-off").classList.remove("hidden");
+            await sleep(1000);
+            target.classList.remove("pointing");
+        }
+
+        if (none) {
+            document.getElementById("media-player").classList.add("hidden");
+            document.getElementById("lights-on").classList.add("hidden");
+            document.getElementById("lights-off").classList.add("hidden");
+        }
+
+    };
+    socket.onclose = function(event) {
+        console.log(event)
+    };
+
+};
+    </script>
+<style>
+        #wrapper {
+            display: flex;
+            justify-content: space-around;
+        }
+
+        #gyro, #top, #bottom {
+            display: flex;
+        }
+
+        #gyro {
+            align-self: baseline;
+            flex-direction: column;
+            position: absolute;
+            z-index: 2;
+            width: 215px;
+            height: 500px;
+        }
+
+        .pointing {
+            background-color: red;
+        }
+
+        .bb {
+            border: 1px black solid;
+            width: 250px;
+            height: 250px;
+        }
+
+        button {
+            font-size: 49pt !important;
+            width: 10em !important;
+            height: 3.5em !important;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #media-player, #lights-on, #lights-off {
+            z-index: 3;
+        }
+
+        aside {
+            margin: 1em;
+            width: 500px;
+        }
+
+        #media-player img {
+            max-height: 30em;
+        }
+        </style>
+  </head>
+  <body>
+    <div id="wrapper">
+        <aside>
+            <img src="flat.png" style="position: absolute; max-width: 500px;">
+            <div id="gyro">
+                <div id="top">
+                    <div class="bb" id="top-left"></div>
+                    <div class="bb" id="top-right"></div>
+                </div>
+                <div id="bottom">
+                    <div class="bb" id="bottom-left"></div>
+                    <div class="bb" id="bottom-right"></div>
+                </div>
+            </div>
+        </aside>
+        <div id="datastream"></div>
+        <div id="lights-off" class="hidden">
+            <h1>Lights</h1>
+            <div class="controllers">
+                <button id="off">Turn off</button>
+            </div>
+        </div>
+        <div id="lights-on" class="hidden">
+            <h1>Lights</h1>
+            <div class="controllers">
+                <button id="on">Turn on</button>
+            </div>
+        </div>
+        <div id="media-player" class="hidden">
+            <h1></h1>
+            <img>
+            <div class="controllers">
+                <button id="pause"></button>
+            </div>
+        </div>
+    </div>
+  </body>
+  <script>
+
+function mplayerFetch() {
+$.get("http://localhost:8080/media", function(data) {
+    data = JSON.parse(data)
+    $("#media-player h1").text(data.attributes.media_title)
+    $("#media-player img").attr("src", "${URL_OF_HOMEASSISTANT}"+data.attributes.entity_picture)
+
+    if (data.state == "playing") {
+        $("#media-player #pause").text("Pause")
+    } else {
+        $("#media-player #pause").text("Play")
+    }
+
+    setTimeout(function() {
+        mplayerFetch();
+    }, 1100)
+});
+}
+
+mplayerFetch();
+
+document.getElementById("pause").onclick = function(event) {
+    event.preventDefault();
+    var xmlHttp = new XMLHttpRequest();
+    xmlHttp.onreadystatechange = function() {
+        if (xmlHttp.readyState == 4 && xmlHttp.status == 200)
+            console.log(xmlHttp.responseText);
+    }
+    xmlHttp.open("GET", "http://localhost:8080/pause", true); // true for asynchronous
+    xmlHttp.send(null);
+};
+
+document.getElementById("on").onclick = function(event) {
+    event.preventDefault();
+    var xmlHttp = new XMLHttpRequest();
+    xmlHttp.onreadystatechange = function() {
+        if (xmlHttp.readyState == 4 && xmlHttp.status == 200)
+            console.log(xmlHttp.responseText);
+    }
+    xmlHttp.open("GET", "http://localhost:8080/on", true); // true for asynchronous
+    xmlHttp.send(null);
+};
+
+document.getElementById("off").onclick = function(event) {
+    event.preventDefault();
+    var xmlHttp = new XMLHttpRequest();
+    xmlHttp.onreadystatechange = function() {
+        if (xmlHttp.readyState == 4 && xmlHttp.status == 200)
+            console.log(xmlHttp.responseText);
+    }
+    xmlHttp.open("GET", "http://localhost:8080/off", true); // true for asynchronous
+    xmlHttp.send(null);
+};
+
+
+</script>
+</html>
